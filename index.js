@@ -1,7 +1,7 @@
-import axios from "axios";
 import * as cheerio from "cheerio";
 
-import { connectToDb, addAmenitiesData } from "./db";
+// import { connectToDb, addAmenitiesData } from "./db";
+import { getHtml } from "./scraper.js";
 
 const DB_CONNECTION_STRING = "";
 
@@ -9,14 +9,14 @@ const citiesList = [
   {
     name: "Atlanta",
     url: "https://www.rentcafe.com/apartments-for-rent/us/ga/atlanta/?",
-    pages: 8,
+    pages: 1,
     lat: 33.791418,
     lng: -84.397917,
   },
   {
     name: "Dallas",
     url: "https://www.rentcafe.com/apartments-for-rent/us/tx/dallas/?",
-    pages: 8,
+    pages: 1,
     lat: 32.776664,
     lng: -96.796988,
   },
@@ -31,25 +31,27 @@ async function amenitiesFetch(cityItem) {
     const url = `${BASE_URL}page=${i}`;
 
     // Get the HTML of a page
-    const response = await axios.get(url);
-    const html = response.data;
+    const html = await getHtml(url);
     const $ = cheerio.load(html);
 
     // Go into the apartment page
-    const apartments = $("li.listing-details");
-    const uniqueApartmentIds = new Set();
+    const apartments = $(
+      "li.listing-details div.listing-information div.listing-name-address h2 a"
+    );
+    const uniqueApartmentUrls = new Set();
     apartments.map((_, e) => {
-      const id = e.attribs["data-value"];
-      uniqueApartmentIds.add(id);
+      const link = e.attribs["href"];
+      uniqueApartmentUrls.add(link);
     });
-    const apartmentIds = Array.from(uniqueApartmentIds);
+    const apartmentUrls = Array.from(uniqueApartmentUrls);
 
     // For each apartment
-    for (let i = 0; i < apartmentIds.length; i++) {
-      const apartmentId = apartmentIds[i];
-      const data = await getAmenityData(apartmentId);
+    for (let i = 0; i < apartmentUrls.length; i++) {
+      const apartmentUrl = apartmentUrls[i];
+      const data = await getAmenityData(apartmentUrl);
 
-      await addAmenitiesData(apartmentId, data);
+      await addAmenitiesData(data);
+      // console.log(data);
     }
 
     //   Wait for 1 sec, so that server won't block us for making multiple requests
@@ -57,14 +59,15 @@ async function amenitiesFetch(cityItem) {
   }
 }
 
-async function getAmenityData(id) {
-  const url = `https://www.rentcafe.com/Preview/Details/${id}`;
-  const response = await axios.get(url);
-
-  const html = response.data.data;
+async function getAmenityData(url) {
+  const html = await getHtml(url);
   const $ = cheerio.load(html);
 
   const [apartmentAmenities, communityAmenities] = [{}, {}];
+
+  // Get property id
+  const title = $("div.property-title-address-rating");
+  const id = title[0].attribs["data-pid"];
 
   //   Get Apartment amenities
   const apartmentAmenityNodes = $("p.apartment-amenities-title+ul>li>div");
@@ -81,6 +84,7 @@ async function getAmenityData(id) {
   });
 
   return {
+    id,
     apartmentAmenities,
     communityAmenities,
   };
@@ -92,7 +96,7 @@ function delay(milliSeconds) {
 
 (async () => {
   try {
-    await connectToDb(DB_CONNECTION_STRING);
+    // await connectToDb(DB_CONNECTION_STRING);
 
     amenitiesFetch(citiesList[0]);
   } catch (error) {

@@ -26,7 +26,11 @@ export const connectToDb = async (connectionString) => {
   });
 };
 
-export const addAmenitiesData = async (id, rcAmenities) => {
+export const addAmenitiesData = async ({
+  id,
+  apartmentAmenities,
+  communityAmenities,
+}) => {
   // TODO: Update this with real model
   // Property mongoose model
   const Property = {};
@@ -37,7 +41,7 @@ export const addAmenitiesData = async (id, rcAmenities) => {
 
   // add amenity data
   property.set({
-    "propertyData.rcAmenities": rcAmenities,
+    "propertyData.rcAmenities": { apartmentAmenities, communityAmenities },
   });
   await property.save();
 };
